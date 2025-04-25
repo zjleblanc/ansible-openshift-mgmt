@@ -16,20 +16,20 @@ Deploy and complete initial setup of AAP instance using the Operator
 ### usage
 
 Important environment vars
-```
-export K8S_AUTH_HOST="<your_openshift_api_host>"
-export K8S_AUTH_API_KEY="<your_openshift_api_key>"
+```bash
+export K8S_AUTH_HOST="<your openshift api host>"
+export K8S_AUTH_API_KEY="<your openshift api key>"
 export K8S_AUTH_VERIFY_SSL="false" # optional
 ```
 
 Playbook vars
-```
+```yaml
 install_project: <desired project/namespace name> # defaults to ansible-automation-platform
 install_name: <desired instance name> # defaults to aap
 ```
 
 [Vaulted](./vars/vaulted.yml) vars
-```
+```yaml
 # See https://github.com/redhat-cop/infra.aap_configuration/tree/devel/roles/controller_license
 # for example using a manifest
 
