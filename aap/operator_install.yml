@@ -1,0 +1,119 @@
+---
+- name: Install Ansible Automation Platform via Operator
+  hosts: localhost
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - vars/vaulted.yml
+
+  vars:
+    install_project: "{{ aap_project | default('ansible-automation-platform') }}"
+    install_name: "{{ aap_name | default('aap') }}"
+
+  tasks:
+    - name: Create project
+      redhat.openshift.k8s:
+        state: present
+        resource_definition:
+          apiVersion: project.openshift.io/v1
+          kind: Project
+          metadata:
+            name: "{{ install_project }}"
+
+    - name: Subscribe project namespace to the operator
+      redhat.openshift.k8s:
+        state: present
+        apply: true
+        definition: "{{ lookup('ansible.builtin.template', 'templates/sub.yml.j2') }}"
+
+    - name: Wait for cluster service version phase | succeeded
+      register: r_csv
+      until:
+        - r_csv.resources | length 
+        - r_csv.resources[0]['status']['phase'] == 'Succeeded'
+      retries: 6
+      delay: 10
+      kubernetes.core.k8s_info:
+        api_version: v1alpha1
+        kind: ClusterServiceVersion
+        namespace: "{{ install_project }}"
+
+    - name: Create AAP instance
+      redhat.openshift.k8s:
+        state: present
+        apply: true
+        definition: "{{ lookup('ansible.builtin.template', 'templates/aap_instance.yml.j2') }}"
+
+    - name: Wait for gateway route
+      register: r_gateway_route
+      until: r_gateway_route.resources | length
+      retries: 6
+      delay: 10
+      kubernetes.core.k8s_info:
+        kind: Route
+        namespace: "{{ install_project }}"
+        name: "{{ install_name }}"
+
+    - name: Extract gateway host
+      ansible.builtin.set_fact:
+        gateway_route_host: "{{ r_gateway_route.resources[0].spec.host }}"
+
+    - name: Get admin password
+      register: r_admin_password
+      kubernetes.core.k8s_info:
+        kind: Secret
+        namespace: "{{ install_project }}"
+        name: "{{ install_name }}-admin-password"
+
+    - name: Extract admin password
+      no_log: true
+      ansible.builtin.set_fact:
+        aap_admin_password: "{{ r_admin_password.resources[0].data.password | ansible.builtin.b64decode }}"
+
+    - name: Wait for gateway pod | running
+      register: r_gateway_pod
+      until:
+        - r_gateway_pod.resources | length 
+        - r_gateway_pod.resources[0]['status']['phase'] == 'Running'
+      retries: 8
+      delay: 15
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ install_project }}"
+        label_selectors:
+          - app.kubernetes.io/component=aap-gateway
+
+    - name: Probe gateway
+      register: r_gateway_probe
+      until: r_gateway_probe is success
+      retries: 8
+      delay: 15
+      ansible.builtin.uri:
+        url: "https://{{ gateway_route_host }}"
+        method: GET
+
+    - name: Probe controller
+      register: r_controller_probe
+      until: r_controller_probe is success
+      retries: 8
+      delay: 15
+      ansible.builtin.uri:
+        url: "https://{{ gateway_route_host.replace(install_name, install_name + '-controller') }}"
+        method: GET
+
+    - name: Controller subscription
+      vars:
+        aap_validate_certs: false
+        aap_hostname: "{{ gateway_route_host }}"
+        aap_username: admin
+        aap_password: "{{ aap_admin_password }}"
+        redhat_subscription_username: "{{ vault_rh_username }}"
+        redhat_subscription_password: "{{ vault_rh_password }}"
+        controller_license:
+          use_lookup: true
+          filters:
+            product_name: "Red Hat Ansible Automation Platform"
+            support_level: "Self-Support"
+      ansible.builtin.include_role:
+        name: infra.aap_configuration.controller_license

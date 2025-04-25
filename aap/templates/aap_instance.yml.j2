@@ -1,0 +1,18 @@
+---
+apiVersion: aap.ansible.com/v1alpha1
+kind: AnsibleAutomationPlatform
+metadata:
+  name: "{{ install_name }}"
+  namespace: "{{ install_project }}"
+spec:
+  # Platform
+  image_pull_policy: IfNotPresent
+  # Components
+  controller:
+    disabled: false
+  eda:
+    disabled: false
+  hub:
+    disabled: false
+  lightspeed:
+    disabled: true
