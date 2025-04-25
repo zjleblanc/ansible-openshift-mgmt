@@ -27,3 +27,13 @@ Playbook vars
 install_project: <desired project/namespace name> # defaults to ansible-automation-platform
 install_name: <desired instance name> # defaults to aap
 ```
+
+[Vaulted](./vars/vaulted.yml) vars
+```
+# See https://github.com/redhat-cop/infra.aap_configuration/tree/devel/roles/controller_license
+# for example using a manifest
+
+# Below uses RH account to lookup and use available subscriptions
+vault_rh_username: <Red Hat account username>
+vault_rh_password: <Red Hat account password>
+```
